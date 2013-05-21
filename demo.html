@@ -1,0 +1,154 @@
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+<title>suggestion组件</title>
+<style type="text/css">
+*{
+    margin: 0;
+    padding: 0;
+}
+input{
+    display: block;
+    width: 300px;
+    height: 25px;
+    line-height: 25px;
+    margin-left: 10px;
+}
+#baiduSuggestion{
+    position: absolute;
+    background-color: white;
+    border: 1px solid #999;
+    max-height: 100px;
+    overflow: auto;
+}
+</style>
+百度搜索:<input id="baiduSearch" />
+本地存储:<input id="localSearch" />
+静态文件:<input readonly id="staticSearch" />
+<div id="baiduSuggestion"></div>
+<div id="localSuggestion"></div>
+<div id="staticSuggestion"></div>
+<button id="taobaoSearch">淘宝搜索</button>
+<button id="fileSearch">本地接口搜索</button>
+<script type="text/javascript" src="../../lib/lib.js"></script>
+<script type="text/javascript" src="../../lib/jquery.js"></script>
+<script type="text/javascript" src="../../lib/underscore.js"></script>
+<script type="text/javascript" src="suggestion.js"></script>
+<script>
+
+var suggestion = lib.extend.useComponent("Suggestion", {
+	getData: function(value){
+        lib.send.jsonp("http://sug.music.baidu.com/info/suggestion?format=json&word="+value,{
+            callback: function(data){
+                console.log(data);
+                suggestion.returnData(data.song.concat(data.song));
+            } 
+        });
+
+    },
+    formatData: function(item){
+        var template = _.template("<%- songname %>");
+        var content = template(item);
+        return content;
+    },
+    currentInput: lib.g("baiduSearch"),
+    render: "baiduSuggestion"
+});
+suggestion.addListener("selected",function(text){
+    alert(text)
+});
+lib.on("baiduSearch","click",function(){
+    suggestion.setCurrentInput(this);
+});
+lib.on("localSearch","click",function(){
+    suggestion.setCurrentInput(this);
+});
+
+lib.on("taobaoSearch","click",function(){
+    suggestion.setGetData(function(value){
+        lib.send.jsonp("http://suggest.taobao.com/sug?extras=1&code=utf-8&q=dd"+value,{
+            callback: function(data){
+                console.log(data);
+                suggestion.returnData(data.result);
+            } 
+        });
+    });
+});
+
+lib.on("fileSearch","click",function(){
+
+    suggestion.setGetData(function(value){
+
+        setTimeout(function(){
+            suggestion.returnData([
+                {name:"我的电脑"},
+                {name:"回收站"}
+                ]);
+        },3000);
+
+    });
+});
+
+
+
+
+
+/*
+var staticSuggestion = lib.extend.useComponent("Suggestion", {
+    getData: function(value){
+        this.returnData([{
+                title: "爱的创可贴",
+                url: "http://www.baidu.com",
+                type: "电视剧",
+                info: "治愈系爱情偶像剧治愈系爱情偶像剧治愈系爱情偶像剧治愈系爱情偶像剧",
+                img: "http://c.hiphotos.baidu.com/video/pic/item/dc54564e9258d109d5e8a2f1d058ccbf6c814d6d.jpg"
+            },{
+                title: "百变大咖秀",
+                url: "http://www.baidu.com",
+                type: "电视剧"
+            },{
+                title: "百变大咖秀",
+                url: "http://www.baidu.com",
+                type: "电视剧"
+            },{
+                title: "仁心解码2",
+                url: "http://www.baidu.com",
+                type: "电视剧"
+            },{
+                title: "神探高伦布",
+                url: "http://www.baidu.com",
+                type: "电视剧"
+            },{
+                title: "喜剧电影",
+                url: "http://www.baidu.com",
+                type: "电视剧"
+            },{
+                title: "动作电影",
+                url: "http://www.baidu.com",
+                type: "电视剧"
+            },{
+                title: "云上的诱惑",
+                url: "http://www.baidu.com",
+                type: "电视剧"
+            }]);
+
+    },
+    formatData: function(item){
+        var template = _.template("<%- title %>[<%- type %>]");
+        var content = template(item);
+        return content;
+    },
+        currentInput: lib.g("staticSearch"),
+        autocomplete: true
+    });
+    staticSuggestion.addListener("selected",function(text){
+        alert(text)
+    });
+    staticSuggestion.render("staticSuggestion");
+
+    lib.on("staticSearch","click",function(){
+        staticSuggestion.isOwner = true;
+        staticSuggestion.getData();
+    });
+*/
+
+
+</script>
