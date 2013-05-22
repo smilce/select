@@ -39,7 +39,7 @@ var suggestion = lib.extend.useComponent("Suggestion", {
         lib.send.jsonp("http://sug.music.baidu.com/info/suggestion?format=json&word="+value,{
             callback: function(data){
                 console.log(data);
-                suggestion.returnData(data.song.concat(data.song));
+                suggestion.returnData(data.song);
             } 
         });
 
@@ -55,6 +55,11 @@ var suggestion = lib.extend.useComponent("Suggestion", {
 suggestion.addListener("selected",function(text){
     alert(text)
 });
+suggestion.addListener("submit",function(value,obj){
+    console.log(value);
+    console.log(obj);
+    console.log(obj[0])
+});
 lib.on("baiduSearch","click",function(){
     suggestion.setCurrentInput(this);
 });
@@ -63,13 +68,12 @@ lib.on("localSearch","click",function(){
 });
 
 lib.on("taobaoSearch","click",function(){
-    suggestion.setGetData(function(value){
-        lib.send.jsonp("http://suggest.taobao.com/sug?extras=1&code=utf-8&q=dd"+value,{
-            callback: function(data){
-                console.log(data);
-                suggestion.returnData(data.result);
-            } 
-        });
+    suggestion.setGetData({
+        url:"http://suggest.taobao.com/sug?extras=1&code=utf-8",
+        key:"q",
+        filter:function(data){
+            return data.result;
+        }
     });
 });
 

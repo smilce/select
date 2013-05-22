@@ -30,25 +30,26 @@
 		this._getData = arg.getData;
 		this.formatData = arg.formatData||null;
         this.current = null;
-        this.input = null;
-        this.list  = [];
+        this._list  = [];
         this.item = [];
         this.hasShow = false;
         this.currentInput = arg.currentInput||null;
-        this.autocomplete = arg.autocomplete||true;
+        this._autocomplete = arg.autocomplete === false ? false : true;
         this.defaults = arg.defaults||null;
         this.stopPropagation = false;
         this.max = arg.max||null;
         this.panel = lib.g(arg.render);
         this._oldEvents = {};
         this._canReceive = false;
+        this._needCache = arg.needCache === false ? false : true;
+        this._cache = {};
         
 	},{
 		init: function(){
 
 			this.addListener("reRenderData", function(data){
 				this.current = undefiend;
-				this.list = data;
+				this._list = data;
 				if(data.length <= 0){
 					this.hide();
 					return;
@@ -56,17 +57,6 @@
 
 
 				this._renderItem(data.slice(0, Math.min((this.max||Number.MAX_VALUE), data.length)));
-				
-				/*if(this.item.length){
-					this._replaceItemData(data.slice(0,Math.min(this.item.length, data.length)));
-					if(data.length > this.item.length){
-						this._renderItem(data.slice(data.length, this.item.length));
-					}
-				}else{
-					this._renderItem(data.slice(0, data.length));
-				}*/
-				
-				
 
 				if(!this.isShow) 
 					this.show();
@@ -100,21 +90,6 @@
 			that._initInputEvent(that.currentInput);
 			
 		},
-		_replaceItemData: function(data){
-			var that = this;
-			lib.array.each(this.item,function(item,index){
-				if(data[index]){
-					var result = that.formatData(data[index]);
-					if(Object.prototype.toString.call(result) === "[object Array]"){
-						item.innerHTML = result[0];
-						item.setAttribute("key", result[1]);
-					}else{
-						item.innerHTML = result;
-						item.setAttribute("key", result);
-					}
-				}				
-			});
-		},
 		_renderItem: function(data){
 			this.parent.innerHTML = "";
 			var fragment = document.createDocumentFragment(); 
@@ -122,7 +97,7 @@
 				for(var i=0,d;d = data[i];i++){
 					var li = document.createElement("li");
 					var result = this.formatData(d);
-					if(Object.prototype.toString.call(result) === "[object Array]"){
+					if(lib.type.getType(result) === "array"){
 						li.innerHTML = result[0];
 						li.setAttribute("key", result[1]);
 					}else{
@@ -132,7 +107,10 @@
         			li.className = "suggestion-item";
         			this.register(li);
 					fragment.appendChild(li);
-					this.item.push(li);
+					
+					var path = lib.uniquePath("suggestion");
+					li.setAttribute("path", path);
+					this._list[i].path = path;
 				}
 			}else{
 				fragment = this._defaultFormat(data);
@@ -143,7 +121,7 @@
 		_defaultFormat: function(data){
 			var that = this;
 			var fragment = document.createDocumentFragment(); 
-			lib.array.each(data,function(item){
+			lib.array.each(data,function(item,index){
 				var li = document.createElement("li");
 				var keys = "";
 
@@ -159,21 +137,39 @@
 
 				fragment.appendChild(li);
 
-				that.item.push(li);
+				var path = lib.uniquePath("suggestion");
+				li.setAttribute("path", path);
+				that._list[index].path = path;
+				
 
 			});
 
 			return fragment;
 		},
-		setCurrent: function(currentItem){
-			$(currentItem).addClass("current");
+		_setCurrent: function(currentItem){
+			if(this.current) $(this.current).removeClass("current");
+            $(currentItem).addClass("current");
             this.current = currentItem;
-            if(this.autocomplete) this.currentInput.value = this.current.getAttribute("key");
+            this.excuteEv("selected",[this.currentInput.value]);
 		},
-		setSelected: function(c){
-			this.current = c;
-            this.hide();
-            this.excuteEv("selected",[this.current.getAttribute("key")]);
+		_setSelected: function(c){
+			this._setCurrent(c);
+			if(this._autocomplete) this.currentInput.value = this.current.getAttribute("key");
+		},
+		_submit: function(c){
+			var obj = {};
+			if(this.current){
+				var list = this._list;
+				var path = this.current.getAttribute("path");
+				lib.array.each(list,function(item,index){
+					if(item.path === path){
+						obj = item;
+						return;
+					}
+				});
+			}
+			this.hide();
+            this.excuteEv("submit",[this.currentInput.value,obj||{}]);
 		},
 		returnData: function(data){
 			if(!this._canReceive) return;
@@ -186,9 +182,11 @@
 		},
 		_resizePanel: function(){
 			if(this.isShow){
-				this.panel.style.left = this.currentInput.offsetLeft-1+"px";
-	            this.panel.style.top = this.currentInput.offsetTop+this.currentInput.offsetHeight+"px";
-				this.panel.style.width = (this.defaults&&this.defaults.width) ? this.defaults.width : this.currentInput.offsetWidth+"px";
+				lib.dom.setStyle(this.panel,{
+					left: this.currentInput.offsetLeft-1+"px",
+					top: this.currentInput.offsetTop+this.currentInput.offsetHeight+"px",
+					width: (this.defaults&&this.defaults.width) ? this.defaults.width : this.currentInput.offsetWidth+"px"
+				});
 			}
 		},
 		_setPrev: function(){
@@ -203,7 +201,7 @@
             }
             this._removeSeleted();
             if(currentItem)
-            	this.setCurrent(currentItem);
+            	this._setSelected(currentItem);
 		},
 		_setNext: function(){
 			var currentItem = null;
@@ -217,7 +215,7 @@
             }
             this._removeSeleted();
             if(currentItem)
-            	this.setCurrent(currentItem);
+            	this._setSelected(currentItem);
 		},
 		_removeSeleted: function(){
 			if(this.current){
@@ -250,18 +248,20 @@
 	                }else{
 	                	switch(e.which){
 		                    case 40:
-		                        if(!that.list.length>0) return;
+		                        if(!that._list.length>0) return;
 		                        that._setNext();
 		                        e.preventDefault();
 		                    break;
 		                    case 38:
-		                        if(!that.list.length>0) return;
+		                        if(!that._list.length>0) return;
 		                        that._setPrev();
 		                        e.preventDefault();
 		                    break;
-
 		                    case 27:
 		                        that.hide();
+		                    break;
+		                    case 13:
+		                    	that._submit();
 		                    break;
 		                }
 	                }
@@ -270,7 +270,7 @@
 				lib.on(input,"keydown",this._oldEvents.currentInput.keydown);
 				lib.on(input,"input",this._oldEvents.currentInput.input);
 			}
-		},
+		}, 
 		hide: function(){
 			this._canReceive = false;
 			if(this.isShow){
@@ -281,24 +281,24 @@
 		register: function(li){
 			var that = this;
             lib.on(li,"mouseover",function(){
-                if(that.current) $(that.current).removeClass("current");
-                $(this).addClass("current");
-                that.current = this;
+                that._setCurrent(this);
             });
             lib.on(li,"mousedown",function(e){
             	that.mouseItem = this;
             });
             lib.on(li,"mouseup",function(e){
             	if(e.which==1&&this===that.mouseItem){
-            		that.setSelected(that.current);
+            		that._setSelected(this);
+            		that._submit();
             	}
                 that.mouseItem = null;
             });
 			 
 		},
 		setCurrentInput: function(input){
-			if(input == this.currentInput) return;
 
+			if(input == this.currentInput) return;
+			this.hide();
 			this._initInputEvent(input);
 
 			this.currentInput = input;
@@ -311,7 +311,37 @@
 		getData: function(value){
 			this.query = value;
 			this._canReceive = true;
-			this._getData.call(this,value);
+			var t = this._getData;
+
+			if(lib.type.getType(t)==="function"){
+				t.call(this,value);
+			}else{
+				var u=t.url,
+					k=t.key,
+					f=t.filter;
+				if(this._needCache&&this._cache[u]&&this._cache[u][value]){
+					this.returnData(this._cache[u][value]);
+				}else{
+					var url = lib.array.toString(u,"&",k,"=",value);
+					var that = this;
+					lib.send.jsonp(url,{
+			            callback: function(data){
+			            	var temp = f(data);
+			            	if(that._needCache){
+			            		console.error(u);
+			            		(!that._cache[u])&&(that._cache[u]={});
+			            		that._cache[u][value] = temp;
+			            	}
+			                console.log(data);
+			                suggestion.returnData(temp);
+			            } 
+			        });
+				}
+				
+			}
+		},
+		set: function(){
+
 		}
 	});
 	lib.object.extend(s.prototype, Events);
